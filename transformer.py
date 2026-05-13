@@ -36,3 +36,13 @@ class MultiHeadAttention(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
         
+    def _split_heads(self, x: torch.Tensor) -> torch.Tensor:
+        # x: (B, T, d_model) → (B, h, T, d_k)
+        B, T, _ = x.shape
+        return x.view(B, T, self.n_heads, self.d_k).transpose(1, 2)
+    
+    def forward(self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor, 
+                mask: torch.Tensor | None = None, ) -> torch.Tensor:
+        B = query.size(0)
+
+        
