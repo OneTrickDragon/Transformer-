@@ -45,4 +45,9 @@ class MultiHeadAttention(nn.Module):
                 mask: torch.Tensor | None = None, ) -> torch.Tensor:
         B = query.size(0)
 
+        Q = self._split_heads(self.W_q(query))
+        K = self._split_heads(self.W_k(key))
+        V = self._split_heads(self.W_v(value))
+
+        scores = Q @ K.transpose(-2, -1) / math.sqrt(self.d_k)
         
