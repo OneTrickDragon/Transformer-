@@ -51,3 +51,34 @@ class MultiHeadAttention(nn.Module):
 
         scores = Q @ K.transpose(-2, -1) / math.sqrt(self.d_k)
         
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, float("-inf"))
+
+        attn = self.dropout(f.softmax(scores, dim=-1))
+        out = (attn @ V).transpose(1, 2).contiguous().view(B, -1, self.n_heads * self.d_k)
+        return self.W_o(out)        
+    
+
+class FeedForward(nn.Module):
+    def __init__(self, d_model: int, d_ff: int, dropout: float = 0.1):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(d_model, d_ff),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_ff, d_model)
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x)
+    
+class EncoderLayer(nn.Module):
+    def __init__(self, d_model: int, n_heads: int, d_ff: int, dropout: float = 0.1):
+        super().__init__()
+        self.self_attn = MultiHeadAttention(d_model, n_heads, dropout)
+        self.ffn = FeedForward(d_model, d_ff, dropout)
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayernNorm(d_model)
+        self.drop = nn.Dropout(dropout)
+
+
