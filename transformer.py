@@ -81,4 +81,47 @@ class EncoderLayer(nn.Module):
         self.norm2 = nn.LayernNorm(d_model)
         self.drop = nn.Dropout(dropout)
 
+    def forward(self, x: torch.Tensor, src_mask: torch.Tensor| None = None) -> torch.Tensor:
+        x =  x + self.drop(self.self_attn(self.norm1(x), self.norm1(x), self.norm1(x), src_mask))
+        x = x + self.drop(self.ffn(self.norm2(x)))
+        return x
 
+class Encoder(nn.Module):
+    def __init__(self, vocab_size: int, d_model: int, n_layers: int, n_heads: int, d_ff: int, 
+                 dropout: float, max_len: int = 5000):
+        super().__init__()
+        self.embed = nn.Embedding(vocab_size, d_model)
+        self.pos_enc = PositionalEncoding(d_model, max_len, dropout)
+        self.layers = nn.ModuleList(
+            [EncoderLayer(d_model, n_heads, d_ff, dropout) for _ in range(n_layers)]
+        )
+        self.norm = nn.LayerNorm(d_model)
+        self.scale = math.sqrt(d_model)
+
+    def forward(self, src: torch.Tensor, src_mask: torch.Tensor | None = None) -> torch.Tensor:
+        x = self.pos_enc(self.embed(src) * self.scale)
+        for layer in self.layers:
+            x = layer(x, src_mask)
+        return self.norm(x)
+
+class DecoderLayer(nn.Module):
+    def __init__(self, d_model: int, n_heads: int, d_ff: int, dropout: float):
+        super().__init__()
+        self.self_attn = MultiHeadAttention(d_model, n_heads, dropout)
+        self.cross_attn = MultiHeadAttention(d_model, n_heads, dropout)
+        self.ffn = FeedForward(d_model, d_ff, dropout)
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.norm3 = nn.LayerNorm(d_model)
+        self.drop = nn.Dropout(dropout)
+
+    def forward(self, x: torch.Tensor, enc_out: torch.Tensor, tgt_mask: torch.Tensor,
+                src_mask: torch.Tensor) -> torch.Tensor:
+        x = x + self.drop(self.self_attn(self.norm1(x), self.norm1(x), self.norm1(x), tgt_mask))
+        x = x + self.drop(self.cross_attn(self.norm2(x), enc_out, enc_out, src_mask))
+
+        x = x + self.drop(self.ffn(self.norm3(x)))
+        return x
+
+
+        
