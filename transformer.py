@@ -124,4 +124,21 @@ class DecoderLayer(nn.Module):
         return x
 
 
-        
+class Decoder(nn.Module):
+    def __init__(self, vocab_size: int, d_model: int, d_ff: int, n_heads: int, 
+                 n_layers: int, dropout: float, max_len: int = 5000):
+        super().__init__()
+        self.embed = nn.Embedding(d_model)
+        self.pos_enc = PositionalEncoding(d_model, max_len, dropout)
+        self.layers = nn.ModuleList(
+            [DecoderLayer(d_model, n_heads, d_ff, dropout) for _ in range(n_layers)]
+        )
+        self.norm = nn.LayerNorm(d_model)
+        self.scale = math.sqrt(d_model)
+
+    def forward(self, tgt: torch.Tensor, enc_out: torch.Tensor, tgt_mask: torch.Tensor| None = None,
+                src_mask: torch.Tensor| None = None) -> torch.Tensor:
+        x = self.pos_enc(self.embed(tgt) * self.scale)
+        for layer in self.layers:
+            x = layer(x, enc_out, tgt_mask, src_mask)
+        return self.norm(x)
