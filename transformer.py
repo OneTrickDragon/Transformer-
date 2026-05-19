@@ -142,3 +142,63 @@ class Decoder(nn.Module):
         for layer in self.layers:
             x = layer(x, enc_out, tgt_mask, src_mask)
         return self.norm(x)
+
+class Transformer(nn.Module):
+    def __init__(self, src_vocab: int, tgt_vocab: int, d_model: int=512,
+                 n_heads: int = 8, n_layers: int = 6, d_ff: int = 2048,
+                 pad_idx: int = 0, dropout: float = 0.1):
+        super().__init__()
+        self.pad = pad_idx
+        self.encoder = Encoder(src_vocab, d_model, n_layers, n_heads, d_ff, dropout)
+        self.decoder = Decoder(tgt_vocab, d_model, d_ff, n_heads, n_layers, dropout)
+        self.proj = nn.Linear(d_model, tgt_vocab)
+
+        self._init_weights()
+
+        def _init_weights(self):
+            for p in self.parameters():
+                if p.dim() > 1:
+                    nn.init.xavier_uniform_(p)
+
+        def _src_mask(self, src: torch.Tensor) -> torch.Tensor:
+            return (src != self.pad_idx).unsqueeze(1).unsqueeze(2)
+        
+        def _tgt_mask(self, tgt: torch.Tensor) -> torch.Tensor:
+            T = tgt.size(1)
+            pad_mask = (tgt != self.pad_idx).unsqueeze(1).unsqueeze(2)
+            causal_mask = torch.tril(torch.ones(T, T, device=tgt.device)).bool()
+            return pad_mask & causal_mask
+        
+        def forward(self, src: torch.Tensor, tgt: torch.Tensor) -> torch.Tensor:
+            src_mask = self._src_mask(src)
+            tgt_mask = self._tgt_mask(tgt)
+
+            enc_out = self.encoder(src, src_mask)
+            dec_out = self.decoder(tgt, enc_out, tgt_mask, src_mask)
+
+            return self.proj(dec_out)  # (B, T, tgt_vocab)
+        
+        @torch.no_grad
+        def greedy_decode(self, src: torch.Tensor, bos_idx: int, eos_idx: 
+                          int, max_len: int = 100,) -> torch.Tensor:
+            
+            B = src.size(0)
+            src_mask = self._src_mask(src)
+            enc_out = self.encoder(src, src_mask)
+
+            ys = torch.full((B,1), bos_idx, dtype=torch.long, device = src.device)
+            done = torch.zeros(B, dtype=torch.bool, device = src.device)
+
+            for _ in range(max_len - 1):
+                tgt_mask = self._tgt_mask(ys)
+                dec_out = self.decoder(ys, enc_out, tgt_mask, src_mask)
+                logits = self.proj(dec_out[:, -1])
+                next_tok = logits.argmax(dim=-1, keepdim=True) 
+                ys = torch.cat([ys, next_tok], dim=1)
+                done |= (next_tok.squeeze(1) == eos_idx)
+                if done.all():
+                    break
+            
+            return ys[:, 1:]
+
+
