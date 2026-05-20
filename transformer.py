@@ -201,4 +201,36 @@ class Transformer(nn.Module):
             
             return ys[:, 1:]
 
+if __name__ == "__main__":
+    torch.manual_seed(9248)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Device: {device}\n")
 
+    SRC_VOCAB, TGT_VOCAB = 1000, 1200
+    PAD, BOS, EOS = 0, 1, 2
+    B, S, T = 4, 10, 8
+    
+    model = Transformer(
+        src_vocab=SRC_VOCAB, tgt_vocab=TGT_VOCAB,
+        d_model=128, n_layers=2, n_heads=4, d_ff=256,
+        dropout=0.1, pad_idx=PAD,
+    ).to(device)
+
+    n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Parameters: {n_params:,}\n")
+ 
+    src = torch.randint(3, SRC_VOCAB, (B, S), device=device)
+    tgt = torch.randint(3, TGT_VOCAB, (B, T), device=device)
+
+    logits = model(src, tgt[:, :-1])             # teacher forcing: tgt[:-1] → tgt[1:]
+    loss_fn = nn.CrossEntropyLoss(ignore_index=PAD)
+    loss = loss_fn(logits.reshape(-1, TGT_VOCAB), tgt[:, 1:].reshape(-1))
+    print(f"Training forward pass OK  |  loss = {loss.item():.4f}")
+    print(f"Logits shape: {logits.shape}  (expected: [{B}, {T-1}, {TGT_VOCAB}])\n")
+
+    model.eval()
+    gen = model.greedy_decode(src[:2], bos_idx=BOS, eos_idx=EOS, max_len=20)
+    print(f"Greedy decode OK  |  output shape: {gen.shape}")
+    print(f"Sample output tokens: {gen[0].tolist()}\n")
+ 
+    print("All checks passed")
